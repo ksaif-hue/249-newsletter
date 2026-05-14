@@ -1295,6 +1295,7 @@ function downloadNewsletter(grade){
     <!-- ══ FOOTER ══ -->
     <div class="nl-footer" style="border-color:${th.borderColor}50;">
       <div class="principal-sig" style="color:${th.gradeBadgeColor};">مديرة المدرسة : ${principal}</div>
+      <div style="font-size:9px;color:${th.borderColor};opacity:.8;margin-top:1px;">إعداد وتصميم : خديجة اليحيائي</div>
     </div>
   </div>
 </div>`;
@@ -1442,6 +1443,7 @@ function downloadNewsletter(grade){
   .nl-footer {
     padding: 4px 14px;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     border-top: 1.5px solid;
