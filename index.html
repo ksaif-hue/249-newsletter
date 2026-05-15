@@ -180,10 +180,17 @@
     <div style="background:#fff;width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--primary);font-size:20px;">🏫</div>
     <div>مدرسة حصة بنت محمد <span>| المسار الأسبوعي</span></div>
   </div>
-  <div class="nav-tabs">
-    <button class="nav-tab active" onclick="switchPage('teacher', this)">✍️ إدخال المعلم</button>
-    <button class="nav-tab" onclick="switchPage('viewer', this)">👁️ عرض البيانات</button>
-    <button class="nav-tab" onclick="switchPage('admin', this)">⚙️ لوحة الإدارة</button>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <!-- Connection Status -->
+    <div id="conn-status" style="display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;background:rgba(255,255,255,.1);font-size:12px;font-weight:700;color:rgba(255,255,255,.6);transition:all .3s;">
+      <span id="conn-dot" style="width:8px;height:8px;border-radius:50%;background:#888;display:inline-block;transition:background .3s;"></span>
+      <span id="conn-text">جاري الاتصال...</span>
+    </div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="switchPage('teacher', this)">✍️ إدخال المعلم</button>
+      <button class="nav-tab" onclick="switchPage('viewer', this)">👁️ عرض البيانات</button>
+      <button class="nav-tab" onclick="switchPage('admin', this)">⚙️ لوحة الإدارة</button>
+    </div>
   </div>
 </nav>
 
@@ -626,14 +633,21 @@ function getFirebaseConfig() {
 function initFirebase() {
   const config = getFirebaseConfig();
   try {
+    // التحقق من وجود databaseURL — أهم حقل للمزامنة
+    if (!config.databaseURL) {
+      showToast('❌ databaseURL مفقود في إعدادات Firebase!', true);
+      console.error('Firebase config missing databaseURL:', config);
+      return false;
+    }
     if (!firebase.apps.length) {
       firebase.initializeApp(config);
     }
     db = firebase.database();
+    console.log('✅ Firebase initialized:', config.projectId);
     return true;
   } catch (e) {
-    console.error(e);
-    showToast('❌ خطأ في الاتصال بـ Firebase', true);
+    console.error('Firebase init error:', e);
+    showToast('❌ خطأ في تهيئة Firebase: ' + e.message, true);
     return false;
   }
 }
@@ -664,13 +678,27 @@ function saveFirebaseConfig() {
 function startSync() {
   if (!db) return;
 
+  // ── مراقبة حالة الاتصال ──
+  db.ref('.info/connected').on('value', (snap) => {
+    const connected = snap.val() === true;
+    const dot  = document.getElementById('conn-dot');
+    const text = document.getElementById('conn-text');
+    const box  = document.getElementById('conn-status');
+    if (connected) {
+      dot.style.background  = '#4ade80';
+      text.textContent      = 'متصل — Online';
+      box.style.background  = 'rgba(74,222,128,.15)';
+      box.style.color       = '#4ade80';
+    } else {
+      dot.style.background  = '#f87171';
+      text.textContent      = 'غير متصل — Offline';
+      box.style.background  = 'rgba(248,113,113,.15)';
+      box.style.color       = '#f87171';
+    }
+  });
+
+  // ── مزامنة الإدخالات ──
   db.ref('entries').on('value', (snapshot) => {
-    const data = snapshot.val();
-    entries = data ? Object.values(data).map((val, i) => {
-      const key = Object.keys(data)[i];
-      return { ...val, firebaseKey: key };
-    }) : [];
-    // Rebuild with correct keys
     const raw = snapshot.val();
     if (raw) {
       entries = Object.keys(raw).map(key => ({ ...raw[key], firebaseKey: key }));
@@ -686,28 +714,32 @@ function startSync() {
       renderViewer();
     }
     updateStats();
+  }, (err) => {
+    console.error('entries sync error:', err);
+    showToast('❌ خطأ في قراءة البيانات: ' + err.message, true);
   });
 
+  // ── مزامنة الجلسة النشطة ──
   db.ref('active_session').on('value', (snapshot) => {
     const session = snapshot.val() || { term: '', week: '' };
 
-    // Always update localStorage and teacher badge
     localStorage.setItem('hessa_active_session', JSON.stringify(session));
     updateTeacherSessionBadge();
 
-    // Only update admin dropdowns if admin is NOT actively focused on them
     const termEl = document.getElementById('filter-term');
     const weekEl = document.getElementById('filter-week');
     const adminFocused = (document.activeElement === termEl || document.activeElement === weekEl);
 
     if (!adminFocused) {
-      termEl.value = session.term || 'ALL';
-      weekEl.value = session.week || 'ALL';
-      curTermFilter = session.term || 'ALL';
-      curWeekFilter = session.week || 'ALL';
+      termEl.value    = session.term || 'ALL';
+      weekEl.value    = session.week || 'ALL';
+      curTermFilter   = session.term || 'ALL';
+      curWeekFilter   = session.week || 'ALL';
     }
 
     updateSessionBannerUI(session);
+  }, (err) => {
+    console.error('session sync error:', err);
   });
 }
 
@@ -1191,10 +1223,25 @@ ${makePage(PAGE3_SUBS, PAGES_LABELS[2], 3)}
 
 // Init
 window.onload = () => {
-  if (initFirebase()) {
+  console.log('🚀 App starting...');
+  console.log('Firebase config:', DEFAULT_FIREBASE_CONFIG);
+
+  const ok = initFirebase();
+  if (ok) {
+    console.log('✅ Firebase ready — starting sync...');
     startSync();
+  } else {
+    console.error('❌ Firebase failed to initialize');
+    // Show error banner
+    const dot  = document.getElementById('conn-dot');
+    const text = document.getElementById('conn-text');
+    if (dot)  dot.style.background = '#f87171';
+    if (text) text.textContent = '❌ خطأ في Firebase';
+    showToast('❌ تعذّر الاتصال بـ Firebase — تحقق من الإعدادات', true);
   }
-  document.getElementById('newsletter-date').value = new Date().toLocaleDateString('ar-AE');
+
+  document.getElementById('newsletter-date').value =
+    new Date().toLocaleDateString('ar-AE', {day:'2-digit', month:'2-digit', year:'numeric'});
   updateTeacherSessionBadge();
 };
 </script>
