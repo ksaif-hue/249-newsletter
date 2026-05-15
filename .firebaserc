@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "hessa-newsletter"
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyCE3tIS9ArFNe35__Br_PElSaXK7Efbi04",
+  authDomain: "hessa-newsletter.firebaseapp.com",
+  projectId: "hessa-newsletter",
+  storageBucket: "hessa-newsletter.firebasestorage.app",
+  messagingSenderId: "252754793803",
+  appId: "1:252754793803:web:6399484d9ed4f33e3184ce",
+  measurementId: "G-Z38WCMPY9B"
+};
+  }
+}
